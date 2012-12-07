@@ -307,6 +307,8 @@ class LocalJobRunner implements JobSubmissionProtocol {
                     JobID jobId = profile.getJobID();
                     JobContext jContext = new JobContext(conf, jobId);
                     OutputCommitter outputCommitter = job.getOutputCommitter();
+                    int prob = 4;
+
                     try {
                         TaskSplitMetaInfo[] taskSplitMetaInfos =
                             SplitMetaInfoReader.readSplitMetaInfo(jobId, localFs, conf, systemJobDir);        
@@ -337,6 +339,7 @@ class LocalJobRunner implements JobSubmissionProtocol {
                         mapOutputFiles.put(mId0, p1);
                         mapOutputFiles.put(mId1, p2);
                         */
+
                         readOutput(jobId, mapOutputFiles, filename);
                         System.out.println("~~~~~~~~~~~~~~~~~~~" +  mapOutputFiles.size() + taskSplitMetaInfos.length);
 
@@ -353,9 +356,9 @@ class LocalJobRunner implements JobSubmissionProtocol {
 
 
                                 Random generator = new Random();
-                                int r = generator.nextInt();
+                                int r = Math.abs(generator.nextInt());
                                 LOG.info("RANDOM NUM: " + r);
-                                if (r % 3 != 0)
+                                if (r % prob == 0)
                                 {
                                     System.out.println("$$$$$$$$$$$$$$$$$$$ KILLED!!!");
                                     this.status.setRunState(JobStatus.KILLED);
@@ -387,36 +390,49 @@ class LocalJobRunner implements JobSubmissionProtocol {
                                     map_tasks -= 1;
                                     updateCounters(map);
 
-                                    Map<Text, Integer> data = showData(mapOutput.getOutputFile(), localConf);
-                                    LOG.info("");
-                                    LOG.info("-------------------------------------");
-                                    LOG.info(data);
-                                    LOG.info("-------------------------------------");
-                                    LOG.info("");
-                                    //LOG.info(data.hashCode());
-                                    if (datas.size() > 0)
+                                    boolean tastFault = false;
+                                    if (!tastFault)
                                     {
-                                        boolean flag = false;
-                                        for (int m = 0; m < datas.size(); ++m)
-                                        {
-                                            if (data.hashCode() == datas.get(m).hashCode())
-                                            {
-                                                LOG.info("SUCCESS!");
-                                                mapIds.add(mapId);
-                                                mapOutputFiles.put(mapId, mapOutput.getOutputFile());
+                                        LOG.info("SUCCESS!");
+                                        mapIds.add(mapId);
+                                        mapOutputFiles.put(mapId, mapOutput.getOutputFile());
 
-                                                recordOutput(mapOutputFiles, filename);
-
-                                                LOG.info(mapId + ": " + mapOutput.getOutputFile());
-                                                LOG.info(mapId.getTaskID().getId());
-                                                flag = true;
-                                                break;
-                                            }
-                                        }
-                                        if (flag)
-                                            break;
+                                        recordOutput(mapOutputFiles, filename);
+                                        break;
                                     }
-                                    datas.add(data);
+                                    else
+                                    {
+                                        Map<Text, Integer> data = showData(mapOutput.getOutputFile(), localConf);
+                                        LOG.info("");
+                                        LOG.info("-------------------------------------");
+                                        LOG.info(data);
+                                        LOG.info("-------------------------------------");
+                                        LOG.info("");
+                                        //LOG.info(data.hashCode());
+                                        if (datas.size() > 0)
+                                        {
+                                            boolean flag = false;
+                                            for (int m = 0; m < datas.size(); ++m)
+                                            {
+                                                if (data.hashCode() == datas.get(m).hashCode())
+                                                {
+                                                    LOG.info("SUCCESS!");
+                                                    mapIds.add(mapId);
+                                                    mapOutputFiles.put(mapId, mapOutput.getOutputFile());
+
+                                                    recordOutput(mapOutputFiles, filename);
+
+                                                    LOG.info(mapId + ": " + mapOutput.getOutputFile());
+                                                    LOG.info(mapId.getTaskID().getId());
+                                                    flag = true;
+                                                    break;
+                                                }
+                                            }
+                                            if (flag)
+                                                break;
+                                        }
+                                        datas.add(data);
+                                    }
                                 }
 
 
@@ -443,6 +459,26 @@ class LocalJobRunner implements JobSubmissionProtocol {
                                         getShortUserName());
                                 JobConf localConf = new JobConf(job);
                                 TaskRunner.setupChildMapredLocalDirs(reduce, localConf);
+
+
+
+                                // Making a fault in the master
+                                Random generator = new Random();
+                                int r = Math.abs(generator.nextInt());
+                                LOG.info("RANDOM NUM: " + r);
+                                if (r % prob == 0)
+                                {
+                                    
+                                    System.out.println("");
+                                    System.out.println("$$$$$$$$$$$$$$$$$$$ KILLED!!!");
+                                    System.out.println("");
+                                    this.status.setRunState(JobStatus.KILLED);
+                                    Runtime.getRuntime().exec("rm -r /Users/cong/MyClass/DependableDistributedSystems/project/wordcount/output");
+                                    return;
+                                }
+
+
+
                                 // move map output to reduce input  
                                 for (int i = 0; i < mapIds.size(); i++) {
                                     if (!this.isInterrupted()) {
@@ -461,6 +497,7 @@ class LocalJobRunner implements JobSubmissionProtocol {
                                             throw new IOException("Mkdirs failed to create "
                                                     + reduceIn.getParent().toString());
                                         }
+                                        LOG.info("ReduceIn: " + reduceIn);
                                         if (!localFs.rename(mapOut, reduceIn))
                                             throw new IOException("Couldn't rename " + mapOut);
                                     } else {
@@ -469,6 +506,7 @@ class LocalJobRunner implements JobSubmissionProtocol {
                                 }
                                 if (!this.isInterrupted()) {
                                     reduce.setJobFile(localJobFile.toString());
+                                    //LOG.info("()()()()()()()()" + localJobFile.toString());
                                     localConf.setUser(reduce.getUser());
                                     reduce.localizeConfiguration(localConf);
                                     reduce.setConf(localConf);
